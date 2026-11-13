@@ -63,6 +63,7 @@ android {
 dependencies {
     compileOnly(libs.xposed.api)
     implementation(libs.yukihookapi)
+    implementation(libs.dexkit)
     ksp(libs.yukihookapi.ksp.xposed)
     implementation(libs.kavaref.core)
     implementation(libs.kavaref.android)

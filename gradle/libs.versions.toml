@@ -10,6 +10,7 @@ androidx-core-ktx = "1.19.0"
 androidx-appcompat = "1.7.1"
 material = "1.14.0"
 androidx-constraintlayout = "2.2.1"
+dexkit = "2.3.0"
 junit = "4.13.2"
 androidx-test-junit = "1.3.0"
 androidx-test-espresso-core = "3.7.0"
@@ -20,6 +21,7 @@ kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 
 [libraries]
+dexkit = { group = "org.luckypray", name = "dexkit", version.ref = "dexkit" }
 yukihookapi = { group = "com.highcapable.yukihookapi", name = "api", version.ref = "yukihookapi" }
 yukihookapi-ksp-xposed = { group = "com.highcapable.yukihookapi", name = "ksp-xposed", version.ref = "yukihookapi" }
 kavaref-core = { group = "com.highcapable.kavaref", name = "kavaref-core", version.ref = "kavaref" }

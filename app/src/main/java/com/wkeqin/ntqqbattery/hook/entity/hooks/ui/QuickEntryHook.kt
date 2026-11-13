@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import com.wkeqin.ntqqbattery.hook.entity.HookPlan
 import com.wkeqin.ntqqbattery.hook.entity.HookStage
+import com.wkeqin.ntqqbattery.hook.entity.ProcessScope
 import com.wkeqin.ntqqbattery.hook.factory.openModuleSettings
 import com.wkeqin.ntqqbattery.ui.activity.BaseHostActivity
 import com.highcapable.yukihookapi.hook.entity.YukiBaseHooker
@@ -19,11 +20,15 @@ object QuickEntryHook : YukiBaseHooker() {
 
     private const val ENTRY_ID = 0x4E545142
     private const val ENTRY_TITLE = "NTQQBattery"
+    private var hostLoader: ClassLoader? = null
+    private val injectedGroups = java.util.Collections.synchronizedMap(java.util.WeakHashMap<Any, Boolean>())
 
     val plan = HookPlan(
         id = "quick-entry-app-create",
-        stage = HookStage.APP_CREATE
+        stage = HookStage.APP_CREATE,
+        processScope = ProcessScope.MAIN_ONLY
     ) {
+        hostLoader = it?.classLoader
         registerHostActivityProxy(it)
         loadHooker(QuickEntryHook)
     }
@@ -43,64 +48,22 @@ object QuickEntryHook : YukiBaseHooker() {
 
     private fun hookSettingsProviders() {
         runCatching {
-            val mainSettingConfigProvider = "com.tencent.mobileqq.setting.main.MainSettingConfigProvider".toClassOrNull()
-            val newSettingConfigProvider = "com.tencent.mobileqq.setting.main.NewSettingConfigProvider".toClassOrNull()
-            val newSettingConfigProviderObf = "com.tencent.mobileqq.setting.main.b".toClassOrNull()
-
-            val oldMethod = mainSettingConfigProvider?.declaredMethods?.firstOrNull {
-                it.returnType == List::class.java &&
-                    it.parameterTypes.size == 1 &&
-                    it.parameterTypes[0] == Context::class.java
+            val loader = hostLoader ?: error("QuickEntryHook: host class loader unavailable")
+            val targets = SettingsEntryResolver.resolve(loader)
+            if (targets.providers.isEmpty()) {
+                error("QuickEntryHook: no settings provider matched; QQ version may be unsupported")
             }
-            val newMethod = newSettingConfigProvider?.declaredMethods?.firstOrNull {
-                it.returnType == List::class.java &&
-                    it.parameterTypes.size == 1 &&
-                    it.parameterTypes[0] == Context::class.java
+            val processor = targets.processor
+                ?: error("QuickEntryHook: no compatible item processor matched")
+            val listeners = SettingsEntryResolver.clickMethods(processor)
+            val callback = createProviderHook(processor, listeners)
+            var installed = 0
+            targets.providers.forEach { method ->
+                runCatching { XposedBridge.hookMethod(method, callback) }
+                    .onSuccess { installed++ }
+                    .onFailure { YLog.error("QuickEntryHook: cannot hook ${method.declaringClass.name}.${method.name}: ${it.message}") }
             }
-            val newObfMethod = newSettingConfigProviderObf?.declaredMethods?.firstOrNull {
-                it.returnType == List::class.java &&
-                    it.parameterTypes.size == 1 &&
-                    it.parameterTypes[0] == Context::class.java
-            }
-
-            if (oldMethod == null && newMethod == null && newObfMethod == null) {
-                return@runCatching
-            }
-
-            val abstractItemProcessor = sequenceOf(
-                "com.tencent.mobileqq.setting.main.processor.AccountSecurityItemProcessor",
-                "com.tencent.mobileqq.setting.main.processor.AboutItemProcessor"
-            ).mapNotNull { it.toClassOrNull() }
-                .mapNotNull { it.superclass }
-                .firstOrNull()
-                ?: error("QuickEntryHook: abstract item processor not found")
-
-            val simpleItemProcessor = sequenceOf(
-                "com.tencent.mobileqq.setting.processor.g",
-                "com.tencent.mobileqq.setting.processor.h",
-                "com.tencent.mobileqq.setting.processor.i",
-                "com.tencent.mobileqq.setting.processor.j",
-                "as3.i"
-            ).mapNotNull { it.toClassOrNull() }
-                .firstOrNull { it.superclass == abstractItemProcessor }
-                ?: error("QuickEntryHook: simple item processor not found")
-
-            val setClickListenerMethods = simpleItemProcessor.declaredMethods
-                .filter { method ->
-                    val argTypes = method.parameterTypes
-                    method.returnType == Void.TYPE &&
-                        argTypes.size == 1 &&
-                        argTypes[0].name == "kotlin.jvm.functions.Function0"
-                }
-                .sortedBy { it.name }
-            if (setClickListenerMethods.isEmpty()) {
-                error("QuickEntryHook: click listener method not found")
-            }
-
-            val callback = createProviderHook(simpleItemProcessor, setClickListenerMethods)
-            oldMethod?.let { XposedBridge.hookMethod(it, callback) }
-            newMethod?.let { XposedBridge.hookMethod(it, callback) }
-            newObfMethod?.let { XposedBridge.hookMethod(it, callback) }
+            YLog.info("QuickEntryHook: installed $installed/${targets.providers.size} providers; processor=${processor.name}")
         }.onFailure {
             YLog.error("QuickEntryHook provider hook failed: ${it.message}")
         }
@@ -114,7 +77,8 @@ object QuickEntryHook : YukiBaseHooker() {
 
         return object : XC_MethodHook() {
             override fun afterHookedMethod(param: MethodHookParam) {
-                val result = param.result as? MutableList<Any?> ?: return
+                val original = param.result as? List<*> ?: return
+                val result = original.toMutableList()
                 val context = param.args.firstOrNull() as? Context ?: return
                 if (containsEntry(result)) return
 
@@ -129,7 +93,9 @@ object QuickEntryHook : YukiBaseHooker() {
                     val group = createItemGroup(result, entryItem)
                     val providerClassName = param.thisObject.javaClass.name
                     val indexToInsert = if (providerClassName.contains("NewSettingConfigProvider") || providerClassName == "com.tencent.mobileqq.setting.main.b") 2 else 1
+                    injectedGroups[group] = true
                     result.add(indexToInsert.coerceAtMost(result.size), group)
+                    param.result = result
                 }.onFailure {
                     YLog.error("QuickEntryHook inject failed: ${it.message}")
                 }
@@ -163,6 +129,7 @@ object QuickEntryHook : YukiBaseHooker() {
         setClickListenerMethods: List<Method>
     ): Any {
         val iconResId = findSettingsIconResId(context)
+        constructor.isAccessible = true
         val entryItem = if (constructorArgCount == 5) {
             constructor.newInstance(context, ENTRY_ID, ENTRY_TITLE, iconResId, null)
         } else {
@@ -226,6 +193,7 @@ object QuickEntryHook : YukiBaseHooker() {
 
     private fun containsEntry(groups: List<Any?>): Boolean {
         return groups.any { group ->
+            if (group != null && injectedGroups.containsKey(group)) return@any true
             runCatching {
                 group?.javaClass?.declaredFields
                     ?.onEach { it.isAccessible = true }
