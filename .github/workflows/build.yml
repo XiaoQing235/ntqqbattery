@@ -43,6 +43,9 @@ jobs:
           signing.keyPassword=${{ secrets.KEY_PASSWORD }}
           EOF
 
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest
+
       - name: Build Debug APK
         run: ./gradlew assembleDebug
 

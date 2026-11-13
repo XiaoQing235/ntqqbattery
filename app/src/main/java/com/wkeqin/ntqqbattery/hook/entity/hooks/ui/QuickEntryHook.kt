@@ -91,7 +91,7 @@ object QuickEntryHook : YukiBaseHooker() {
                     )
 
                     val group = createItemGroup(result, entryItem)
-                    val providerClassName = param.thisObject.javaClass.name
+                    val providerClassName = param.method.declaringClass.name
                     val indexToInsert = if (providerClassName.contains("NewSettingConfigProvider") || providerClassName == "com.tencent.mobileqq.setting.main.b") 2 else 1
                     injectedGroups[group] = true
                     result.add(indexToInsert.coerceAtMost(result.size), group)
@@ -177,6 +177,7 @@ object QuickEntryHook : YukiBaseHooker() {
 
         return runCatching {
             groupClass.getDeclaredConstructor(List::class.java, CharSequence::class.java, CharSequence::class.java)
+                .apply { isAccessible = true }
                 .newInstance(list, "", "")
         }.getOrElse {
             val defaultMarkerClass = "kotlin.jvm.internal.DefaultConstructorMarker".toClassOrNull()
@@ -187,7 +188,7 @@ object QuickEntryHook : YukiBaseHooker() {
                 CharSequence::class.java,
                 Int::class.javaPrimitiveType,
                 defaultMarkerClass
-            ).newInstance(list, "", "", 6, null)
+            ).apply { isAccessible = true }.newInstance(list, "", "", 6, null)
         }
     }
 
