@@ -50,3 +50,5 @@ jobs:
           name: NTQQBattery-qq93-release
           path: output/*
           if-no-files-found: error
+
+# Rebuild qq93.2 with explicit hook process identity and persistent diagnostics.
