@@ -1,0 +1,52 @@
+name: Build installable Release APK
+
+on:
+  push:
+    paths:
+      - '.github/workflows/release-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Create one-build signing key
+        shell: bash
+        run: |
+          PASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::$PASSWORD"
+          keytool -genkeypair -keystore app/release.jks -storetype JKS \
+            -storepass "$PASSWORD" -keypass "$PASSWORD" -alias one-build \
+            -keyalg RSA -keysize 3072 -validity 3650 \
+            -dname "CN=NTQQBattery experimental one-build signing"
+          printf 'signing.storePassword=%s\nsigning.keyAlias=one-build\nsigning.keyPassword=%s\n' "$PASSWORD" "$PASSWORD" > local.properties
+      - name: Test and build optimized release
+        run: ./gradlew :app:testDebugUnitTest :app:assembleRelease
+      - name: Verify and package APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)"
+          "$APKSIGNER" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
+          mkdir -p output
+          cp app/build/outputs/apk/release/app-release.apk output/NTQQBattery-qq93-release.apk
+          cd output
+          sha256sum NTQQBattery-qq93-release.apk > SHA256SUMS
+          printf '%s\n' 'Experimental independent QQ 9.3 settings-entry fix.' 'Release build with R8 optimization, signed using a one-build key.' 'Private signing key is discarded; this APK cannot update an installation signed by upstream or another build.' 'Do not clear QQ data. Device compatibility has not been verified.' > INSTALL-NOTES.txt
+      - name: Remove temporary signing material
+        if: always()
+        run: rm -f app/release.jks local.properties
+      - uses: actions/upload-artifact@v7
+        with:
+          name: NTQQBattery-qq93-release
+          path: output/*
+          if-no-files-found: error
