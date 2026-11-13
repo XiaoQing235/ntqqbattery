@@ -28,6 +28,7 @@ object QuickEntryHook : YukiBaseHooker() {
         stage = HookStage.APP_CREATE,
         processScope = ProcessScope.MAIN_ONLY
     ) {
+        XposedBridge.log("NTQQBattery: QuickEntryHook install started")
         hostLoader = it?.classLoader
         registerHostActivityProxy(it)
         loadHooker(QuickEntryHook)
@@ -63,7 +64,7 @@ object QuickEntryHook : YukiBaseHooker() {
                     .onSuccess { installed++ }
                     .onFailure { YLog.error("QuickEntryHook: cannot hook ${method.declaringClass.name}.${method.name}: ${it.message}") }
             }
-            YLog.info("QuickEntryHook: installed $installed/${targets.providers.size} providers; processor=${processor.name}")
+            XposedBridge.log("NTQQBattery: QuickEntryHook: installed $installed/${targets.providers.size} providers; processor=${processor.name}")
         }.onFailure {
             YLog.error("QuickEntryHook provider hook failed: ${it.message}")
         }
@@ -74,6 +75,7 @@ object QuickEntryHook : YukiBaseHooker() {
         setClickListenerMethods: List<Method>
     ): XC_MethodHook {
         val constructorInfo = findSimpleItemProcessorConstructor(simpleItemProcessor)
+        val loggedFirstInjection = java.util.concurrent.atomic.AtomicBoolean(false)
 
         return object : XC_MethodHook() {
             override fun afterHookedMethod(param: MethodHookParam) {
@@ -96,6 +98,9 @@ object QuickEntryHook : YukiBaseHooker() {
                     injectedGroups[group] = true
                     result.add(indexToInsert.coerceAtMost(result.size), group)
                     param.result = result
+                    if (loggedFirstInjection.compareAndSet(false, true)) {
+                        XposedBridge.log("NTQQBattery: QuickEntryHook first entry injected via ${param.method.declaringClass.name}.${param.method.name}")
+                    }
                 }.onFailure {
                     YLog.error("QuickEntryHook inject failed: ${it.message}")
                 }

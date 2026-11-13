@@ -429,7 +429,7 @@ object NTQQHooker : YukiBaseHooker() {
                     owner = this@NTQQHooker,
                     stage = HookStage.EARLY_ATTACH,
                     context = context,
-                    isMainProcess = processName == mainProcessName
+                    isMainProcess = ProcessIdentity.isMainProcess(this@NTQQHooker.processName, this@NTQQHooker.mainProcessName)
                 )
             }
         }
@@ -437,7 +437,7 @@ object NTQQHooker : YukiBaseHooker() {
         onAppLifecycle {
             onCreate {
                 NTQQFeatures.init(appClassLoader!!)
-                YLog.debug("NTQQBattery hook starting in $packageName ($processName)")
+                de.robv.android.xposed.XposedBridge.log("NTQQBattery: APP_CREATE process=${this@NTQQHooker.processName}, main=${this@NTQQHooker.mainProcessName}, mainScope=${ProcessIdentity.isMainProcess(this@NTQQHooker.processName, this@NTQQHooker.mainProcessName)}")
                 ConfigData.init(this)
                 // 带内存监控的 warmup，排查内存大户
                 if (FeatureRegistry.all.any { ConfigData.isEnabled(it) }) {
@@ -449,7 +449,7 @@ object NTQQHooker : YukiBaseHooker() {
                     owner = this@NTQQHooker,
                     stage = HookStage.APP_CREATE,
                     context = this,
-                    isMainProcess = processName == mainProcessName
+                    isMainProcess = ProcessIdentity.isMainProcess(this@NTQQHooker.processName, this@NTQQHooker.mainProcessName)
                 )
             }
         }
