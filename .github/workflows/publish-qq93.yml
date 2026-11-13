@@ -18,9 +18,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh run watch 43394593812 --exit-status
-          test "$(gh run view 43394593812 --json headSha --jq .headSha)" = "7c48a766ba2a009857848b44589287abbaa9bb03"
-          gh run download 43394593812 --name NTQQBattery-qq93-release --dir output
+          gh run watch 43396263498 --exit-status
+          test "$(gh run view 43396263498 --json headSha --jq .headSha)" = "d9adaea543dae89732a8195a445a590c447c512c"
+          gh run download 43396263498 --name NTQQBattery-qq93-release --dir output
           cd output
           sha256sum -c SHA256SUMS
       - name: Publish experimental release
@@ -31,7 +31,10 @@ jobs:
         run: |
           set -euo pipefail
           cat > notes.md <<'EOF'
-          ## QQ 9.3 settings-entry adaptation
+          ## QQ 9.3 settings-entry adaptation, second test build
+          - The first experimental build still showed no entry in the user's logs. The APP_CREATE receiver exposed a NUL-padded process name and incorrectly skipped the main-process-only entry hook.
+          - This build uses the hook framework's explicit process identity and exact NUL-aware comparison; subprocesses remain excluded.
+          - Adds persistent Xposed stage, provider-registration and first-injection diagnostics. This is a targeted fix awaiting another real-device test, not a confirmed compatibility fix.
           - Independently implemented settings-provider discovery and item constructor/callback matching, informed by TSBattery's compatibility approach.
           - Preserves NTQQBattery's settings page, storage, and battery-saving features.
           - Unit tests and optimized Release build passed; APK signature verified.
@@ -41,7 +44,7 @@ jobs:
 
           This is an unofficial experimental fork build. Existing upstream notices remain unchanged; no new license is asserted over upstream code.
           EOF
-          gh release create v0.7.4-qq93.1 output/NTQQBattery-qq93-release.apk output/SHA256SUMS output/INSTALL-NOTES.txt \
-            --target 7c48a766ba2a009857848b44589287abbaa9bb03 \
-            --title "NTQQBattery QQ 9.3 settings entry · experimental 1" \
+          gh release create v0.7.4-qq93.2 output/NTQQBattery-qq93-release.apk output/SHA256SUMS output/INSTALL-NOTES.txt \
+            --target d9adaea543dae89732a8195a445a590c447c512c \
+            --title "NTQQBattery QQ 9.3 settings entry · experimental 2" \
             --notes-file notes.md --prerelease
